@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>You Draw I Guess - Client</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background: #f0f2f5; padding: 15px; display: flex; flex-direction: column; height: 100vh; }
+        
+        #login-screen { position: fixed; top:0; left:0; width:100%; height:100%; background:#fff; display:flex; flex-direction:column; justify-content:center; align-items:center; z-index:100; padding:20px; }
+        .team-grid { display: grid; grid-template-columns: repeat(3, 100px); gap: 15px; }
+        .btn-team { padding: 20px 0; font-size: 18px; font-weight: bold; color: #fff; border: none; border-radius: 12px; cursor: pointer; text-align: center; }
+        #btn-g1 { background: #ff6b6b; } #btn-g2 { background: #4ecdc4; } #btn-g3 { background: #45b7d1; }
+
+        #game-screen { display: none; flex-direction: column; height: 100%; gap: 10px; }
+        .header { background: #fff; padding: 10px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .scoreboard { display: flex; gap: 10px; font-size: 14px; font-weight: bold; }
+        
+        .canvas-container { position: relative; width: 100%; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); flex-grow: 1; min-height: 250px; }
+        canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+        #word-overlay { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); color: #fff; padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 18px; pointer-events: none; }
+        
+        #toolbar { position: absolute; bottom: 10px; left: 10px; display: none; gap: 5px; }
+        .tool-btn { padding: 6px 12px; background: #34495e; color: #fff; border: none; border-radius: 5px; font-size: 12px; cursor: pointer; font-weight: bold; }
+        .tool-btn.active { background: #e67e22; }
+
+        .chat-container { height: 180px; background: #fff; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .chat-messages { flex-grow: 1; padding: 10px; overflow-y: auto; font-size: 14px; display: flex; flex-direction: column; gap: 5px; }
+        .msg { padding: 4px 8px; border-radius: 5px; background: #f1f3f5; width: fit-content; max-width: 80%; }
+        .msg.system { background: #d4edda; color: #155724; font-weight: bold; align-self: center; }
+        .chat-input-area { display: flex; padding: 8px; border-top: 1px solid #eee; }
+        .chat-input-area input { flex-grow: 1; padding: 8px; border: 1px solid #ddd; border-radius: 5px; margin-right: 5px; }
+        .chat-input-area button { padding: 8px 15px; background: #007bff; color: #fff; border: none; border-radius: 5px; font-weight: bold; }
+
+        #result-screen { position: fixed; top:0; left:0; width:100%; height:100%; background:linear-gradient(135deg, #2c3e50, #1a252f); display:none; flex-direction:column; justify-content:center; align-items:center; z-index:200; color:#fff; }
+        .rank-box { background: rgba(255,255,255,0.1); padding: 25px; border-radius: 15px; width: 80%; max-width: 400px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); text-align: center; }
+        .rank-item { display: flex; justify-content: space-between; padding: 15px; margin: 10px 0; border-radius: 8px; font-size: 20px; font-weight: bold; }
+        .rank-1 { background: linear-gradient(90deg, #f1c40f, #f39c12); color: #000; transform: scale(1.05); }
+        .rank-2 { background: linear-gradient(90deg, #bdc3c7, #95a5a6); }
+        .rank-3 { background: linear-gradient(90deg, #e67e22, #d35400); }
+    </style>
+</head>
+<body>
+
+    <!-- 1. 登入選組畫面 -->
+    <div id="login-screen">
+        <h2 style="margin-bottom: 25px; color:#2c3e50; font-size: 24px;">You Draw I Guess 🎉</h2>
+        <p style="margin-bottom: 15px; font-weight: bold; color:#7f8c8d;">Select your Team to Join:</p>
+        <div class="team-grid">
+            <button class="btn-team" id="btn-g1" onclick="joinGame('G1')">G1</button>
+            <button class="btn-team" id="btn-g2" onclick="joinGame('G2')">G2</button>
+            <button class="btn-team" id="btn-g3" onclick="joinGame('G3')">G3</button>
+        </div>
+    </div>
+
+    <!-- 2. 主要遊戲畫面 -->
+    <div id="game-screen">
+        <div class="header">
+            <div><span id="display-team" style="font-weight:bold;"></span></div>
+            <div id="timer-box" style="background:#e74c3c; color:#fff; padding:3px 10px; border-radius:5px; font-weight:bold;">⏳ <span id="current-timer">0</span>s</div>
+            <div class="scoreboard">
+                <span style="color:#ff6b6b">G1:<span id="score-G1">0</span></span>
+                <span style="color:#4ecdc4">G2:<span id="score-G2">0</span></span>
+                <span style="color:#45b7d1">G3:<span id="score-G3">0</span></span>
+            </div>
+        </div>
+
+        <div class="canvas-container">
+            <div id="word-overlay" style="display:none;">Secret Word: <span id="secret-word"></span></div>
+            <canvas id="paintCanvas"></canvas>
+            <div id="toolbar">
+                <button id="btn-pen" class="tool-btn active" onclick="setTool('pen')">✏️ Pen</button>
+                <button id="btn-eraser" class="tool-btn" onclick="setTool('eraser')">🧽 Eraser</button>
+            </div>
+        </div>
+
+        <div class="chat-container">
+            <div class="chat-messages" id="chat-box"></div>
+            <div class="chat-input-area">
+                <input type="text" id="chat-input" placeholder="Type your guess here..." autocomplete="off">
+                <button onclick="sendChatMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 終局排行榜畫面 -->
+    <div id="result-screen">
+        <h1 style="margin-bottom: 25px; font-size: 30px; letter-spacing: 1px;">🏆 FINAL RANKING 🏆</h1>
+        <div class="rank-box" id="rank-container"></div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAfVdbS6K6qMNvw8rdHoGMYjnMTH4QoygM",
+            authDomain: "u-draw-i-guess.firebaseapp.com",
+            databaseURL: "https://u-draw-i-guess-default-rtdb.firebaseio.com/", 
+            projectId: "u-draw-i-guess",
+            storageBucket: "u-draw-i-guess.firebasestorage.app",
+            messagingSenderId: "527918146258",
+            appId: "1:527918146258:web:86d26163b5c5464368830b"
+        };
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        } else {
+            firebase.app();
+        }
+        const db = firebase.database();
+
+        let myName = "", myTeam = "";
+        let isDrawing = false, canDraw = false, lastX = 0, lastY = 0;
+        let currentWord = "", isGuessed = false, currentMode = "playing";
+        let activeTool = "pen";
+
+        const canvas = document.getElementById('paintCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            ctx.lineCap = 'round';
+        }
+
+        // 當調整視窗大小時自動重新整理畫布比例
+        window.addEventListener('resize', () => {
+            if (document.getElementById('game-screen').style.display === 'flex') {
+                resizeCanvas();
+            }
+        });
+
+        function setTool(tool) {
+            activeTool = tool;
+            document.getElementById('btn-pen').classList.toggle('active', tool === 'pen');
+            document.getElementById('btn-eraser').classList.toggle('active', tool === 'eraser');
+        }
+
+        function joinGame(team) {
+            myTeam = team;
+            myName = "Player";
+
+            document.getElementById('display-team').innerText = `${myTeam} Team`;
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'flex';
+            
+            resizeCanvas();
+            initSync();
+        }
+
+        function initSync() {
+            db.ref('teams').on('value', snapshot => {
+                const data = snapshot.val() || { G1:{score:0}, G2:{score:0}, G3:{score:0} };
+                document.getElementById('score-G1').innerText = data.G1?.score || 0;
+                document.getElementById('score-G2').innerText = data.G2?.score || 0;
+                document.getElementById('score-G3').innerText = data.G3?.score || 0;
+                if(currentMode === "result") { showResultScreen(data); }
+            });
+
+            db.ref('gameState/timer').on('value', snapshot => {
+                const t = snapshot.val();
+                document.getElementById('current-timer').innerText = t !== null ? t : 0;
+            });
+
+            // 🟢 監聽狀態（大廳掛網放行優化版）
+            db.ref('gameState').on('value', snapshot => {
+                const state = snapshot.val();
+                if(!state) return;
+
+                currentWord = state.currentWord || "";
+                isGuessed = state.isGuessed || false;
+                currentMode = state.status || "playing";
+
+                // 重設回 waiting 時，允許玩家留在遊戲畫面，不強制彈出！
+                if(currentMode === 'waiting') {
+                    document.getElementById('result-screen').style.display = 'none';
+                    document.getElementById('word-overlay').style.display = 'none';
+                    document.getElementById('toolbar').style.display = 'none';
+                    document.getElementById('chat-input').disabled = true;
+                    document.getElementById('chat-input').placeholder = "Waiting for Admin to start the next round...";
+                    canDraw = false;
+                    return;
+                }
+
+                if(currentMode === 'result') {
+                    document.getElementById('game-screen').style.display = 'none';
+                    document.getElementById('result-screen').style.display = 'flex';
+                    db.ref('teams').once('value', snap => showResultScreen(snap.val()));
+                    return;
+                } else {
+                    document.getElementById('result-screen').style.display = 'none';
+                    if (document.getElementById('login-screen').style.display !== 'none') {
+                        // 如果一開始沒進來，在非 waiting/result 狀態下確保能開起遊戲畫面
+                        document.getElementById('game-screen').style.display = 'flex';
+                    }
+                }
+
+                if(currentMode === 'playing') {
+                    const isTimeUp = (state.timer <= 0);
+                    
+                    if(myTeam === state.activeTeam) {
+                        canDraw = !isTimeUp && !isGuessed;
+                        document.getElementById('word-overlay').style.display = 'block';
+                        document.getElementById('secret-word').innerText = currentWord;
+                        document.getElementById('toolbar').style.display = 'flex';
+                        document.getElementById('chat-input').disabled = true;
+                        document.getElementById('chat-input').placeholder = isTimeUp ? "Time's up!" : "You are the Drawer!";
+                    } else {
+                        canDraw = false;
+                        document.getElementById('word-overlay').style.display = 'none';
+                        document.getElementById('toolbar').style.display = 'none';
+                        
+                        if(isTimeUp) {
+                            document.getElementById('chat-input').disabled = true;
+                            document.getElementById('chat-input').placeholder = "Time's up! Unsolved.";
+                        } else if(isGuessed) {
+                            document.getElementById('chat-input').disabled = true;
+                            document.getElementById('chat-input').placeholder = "Correctly guessed!";
+                        } else {
+                            document.getElementById('chat-input').disabled = false;
+                            document.getElementById('chat-input').placeholder = "Type your guess here...";
+                        }
+                    }
+                }
+            });
+
+            db.ref('drawing').on('child_added', snapshot => {
+                const pt = snapshot.val();
+                if(!isDrawing) {
+                    ctx.strokeStyle = pt.color;
+                    ctx.lineWidth = pt.width;
+                    ctx.beginPath();
+                    ctx.moveTo(pt.x1 * canvas.width, pt.y1 * canvas.height);
+                    ctx.lineTo(pt.x2 * canvas.width, pt.y2 * canvas.height);
+                    ctx.stroke();
+                }
+            });
+
+            db.ref('drawing').on('value', snapshot => {
+                if(!snapshot.exists()) ctx.clearRect(0, 0, canvas.width, canvas.height);
+            });
+
+            db.ref('messages').limitToLast(20).on('value', snapshot => {
+                const box = document.getElementById('chat-box');
+                box.innerHTML = "";
+                snapshot.forEach(child => {
+                    const m = child.val();
+                    const div = document.createElement('div');
+                    if(m.sender === 'SYSTEM') {
+                        div.className = 'msg system';
+                    } else {
+                        div.className = 'msg';
+                    }
+                    div.innerText = m.text;
+                    box.appendChild(div);
+                });
+                box.scrollTop = box.scrollHeight;
+            });
+        }
+
+        function showResultScreen(teamsData) {
+            const container = document.getElementById('rank-container');
+            container.innerHTML = "";
+            let arr = [
+                { name: 'Team G1', score: teamsData?.G1?.score || 0 },
+                { name: 'Team G2', score: teamsData?.G2?.score || 0 },
+                { name: 'Team G3', score: teamsData?.G3?.score || 0 }
+            ];
+            arr.sort((a, b) => b.score - a.score);
+            arr.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = `rank-item rank-${index + 1}`;
+                div.innerHTML = `<span>Rank ${index + 1}: ${item.name}</span> <span>${item.score} Pts</span>`;
+                container.appendChild(div);
+            });
+        }
+
+        canvas.addEventListener('mousedown', startDraw);
+        canvas.addEventListener('mousemove', drawing);
+        canvas.addEventListener('mouseup', stopDraw);
+        canvas.addEventListener('touchstart', e => { const t = e.touches[0]; startDraw({offsetX: t.clientX - canvas.getBoundingClientRect().left, offsetY: t.clientY - canvas.getBoundingClientRect().top}); });
+        canvas.addEventListener('touchmove', e => { const t = e.touches[0]; drawing({offsetX: t.clientX - canvas.getBoundingClientRect().left, offsetY: t.clientY - canvas.getBoundingClientRect().top}); e.preventDefault(); });
+        canvas.addEventListener('touchend', stopDraw);
+
+        function startDraw(e) { if(!canDraw) return; isDrawing = true; lastX = e.offsetX; lastY = e.offsetY; }
+        function drawing(e) {
+            if(!isDrawing || !canDraw) return;
+            const curX = e.offsetX; const curY = e.offsetY;
+            const drawColor = (activeTool === 'eraser') ? '#ffffff' : '#333333';
+            const drawWidth = (activeTool === 'eraser') ? 25 : 4;
+
+            ctx.strokeStyle = drawColor;
+            ctx.lineWidth = drawWidth;
+            ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(curX, curY); ctx.stroke();
+
+            db.ref('drawing').push({
+                x1: lastX / canvas.width, y1: lastY / canvas.height,
+                x2: curX / canvas.width,  y2: curY / canvas.height,
+                color: drawColor,
+                width: drawWidth
+            });
+            lastX = curX; lastY = curY;
+        }
+        function stopDraw() { isDrawing = false; }
+
+        function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if(!text) return;
+            input.value = "";
+
+            if(!isGuessed && text === currentWord && currentWord !== "") {
+                db.ref('gameState/isGuessed').set(true);
+                db.ref(`teams/${myTeam}/score`).transaction(s => (s || 0) + 1);
+                db.ref('messages').push({
+                    sender: 'SYSTEM',
+                    text: `🎉 ${myTeam} Team correctly guessed the word! The answer is [ ${currentWord} ]!`
+                });
+            } else {
+                db.ref('messages').push({
+                    sender: myTeam,
+                    text: `[${myTeam}] : ${text}`
+                });
+            }
+        }
+        document.getElementById('chat-input').addEventListener('keypress', e => { if(e.key === 'Enter') sendChatMessage(); });
+    </script>
+</body>
+</html>

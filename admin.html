@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>遊戲主控台後台 👑</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <style>
+        body { font-family: sans-serif; background: #2c3e50; color: #fff; padding: 20px; max-width: 600px; margin: 0 auto; }
+        .card { background: #34495e; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        h2 { margin-bottom: 15px; border-bottom: 2px solid #1abc9c; padding-bottom: 5px; color: #1abc9c; }
+        label { display: block; margin: 10px 0 5px; font-weight: bold; }
+        select, input { width: 100%; padding: 10px; border: none; border-radius: 5px; margin-bottom: 15px; font-size: 16px; box-sizing: border-box;}
+        button { width: 100%; padding: 12px; background: #1abc9c; border: none; color: #fff; font-size: 16px; font-weight: bold; border-radius: 5px; cursor: pointer; margin-bottom: 10px; }
+        button:hover { background: #16a085; }
+        .btn-danger { background: #e74c3c; } .btn-danger:hover { background: #c0392b; }
+        .btn-warning { background: #f39c12; } .btn-warning:hover { background: #d35400; }
+        .score-control { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; background: #2c3e50; padding: 10px; border-radius: 5px; }
+        .score-btn { width: auto; padding: 5px 15px; margin: 0 5px; }
+        #timer-display { font-size: 24px; font-weight: bold; color: #e74c3c; text-align: center; margin: 10px 0; }
+    </style>
+</head>
+<body>
+
+    <h1>國王的主控面板 👑（你畫我猜版）</h1>
+    
+    <div class="card">
+        <h2>新回合發布面板</h2>
+        <label>1. 選擇作畫組別：</label>
+        <select id="active-team">
+            <option value="G1">G1 組作畫</option>
+            <option value="G2">G2 組作畫</option>
+            <option value="G3">G3 組作畫</option>
+        </select>
+
+        <label>2. 輸入神秘題目：</label>
+        <input type="text" id="target-word" placeholder="例如：珍珠奶茶..." autocomplete="off">
+
+        <label>3. 設定限時秒數：</label>
+        <input type="number" id="round-time" value="60" min="5">
+
+        <button onclick="startRound()">🚀 派發題目（同步開始倒數）</button>
+        <button class="btn-danger" onclick="clearCanvas()">🧹 僅清空畫布</button>
+    </div>
+
+    <div class="card">
+        <h2>目前倒數時間</h2>
+        <div id="timer-display">⏳ <span id="adm-timer">0</span> 秒</div>
+    </div>
+
+    <div class="card">
+        <h2>手動答對題數微調</h2>
+        <div class="score-control">
+            <span>G1 題數: <b id="adm-score-G1">0</b></span>
+            <div>
+                <button class="score-btn" onclick="adjustScore('G1', 1)">+1 題</button>
+                <button class="score-btn btn-danger" onclick="adjustScore('G1', -1)">-1</button>
+            </div>
+        </div>
+        <div class="score-control">
+            <span>G2 題數: <b id="adm-score-G2">0</b></span>
+            <div>
+                <button class="score-btn" onclick="adjustScore('G2', 1)">+1 題</button>
+                <button class="score-btn btn-danger" onclick="adjustScore('G2', -1)">-1</button>
+            </div>
+        </div>
+        <div class="score-control">
+            <span>G3 題數: <b id="adm-score-G3">0</b></span>
+            <div>
+                <button class="score-btn" onclick="adjustScore('G3', 1)">+1 題</button>
+                <button class="score-btn btn-danger" onclick="adjustScore('G3', -1)">-1</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>遊戲終局控制</h2>
+        <button class="btn-warning" onclick="triggerFinalResult()">🏆 進行最終結算（全場跳轉排行）</button>
+        <button class="btn-danger" onclick="resetEntireGame()">⚠️ 全局徹底重設（釋放畫面上鎖）</button>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAfVdbS6K6qMNvw8rdHoGMYjnMTH4QoygM",
+            authDomain: "u-draw-i-guess.firebaseapp.com",
+            databaseURL: "https://u-draw-i-guess-default-rtdb.firebaseio.com/", 
+            projectId: "u-draw-i-guess",
+            storageBucket: "u-draw-i-guess.firebasestorage.app",
+            messagingSenderId: "527918146258",
+            appId: "1:527918146258:web:86d26163b5c5464368830b"
+        };
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        } else {
+            firebase.app();
+        }
+        const db = firebase.database();
+        let timerInterval = null;
+
+        db.ref('teams').on('value', snapshot => {
+            const data = snapshot.val();
+            document.getElementById('adm-score-G1').innerText = data?.G1?.score || 0;
+            document.getElementById('adm-score-G2').innerText = data?.G2?.score || 0;
+            document.getElementById('adm-score-G3').innerText = data?.G3?.score || 0;
+        });
+
+        db.ref('gameState/timer').on('value', snapshot => {
+            const t = snapshot.val();
+            document.getElementById('adm-timer').innerText = t !== null ? t : 0;
+        });
+
+        function startRound() {
+            const team = document.getElementById('active-team').value;
+            const word = document.getElementById('target-word').value.trim();
+            let seconds = parseInt(document.getElementById('round-time').value);
+
+            if(!word) { alert('請先輸入題目！'); return; }
+            if(isNaN(seconds) || seconds <= 0) seconds = 60;
+
+            clearInterval(timerInterval);
+
+            db.ref('gameState').set({
+                status: 'playing',
+                activeTeam: team,
+                currentWord: word,
+                isGuessed: false,
+                timer: seconds
+            });
+
+            db.ref('drawing').remove();
+            db.ref('messages').push({
+                sender: 'SYSTEM',
+                text: `📢 Round Started! [${team}] is drawing now. Time limit: ${seconds}s!`
+            });
+
+            timerInterval = setInterval(() => {
+                seconds--;
+                db.ref('gameState/timer').set(seconds);
+
+                if(seconds <= 0) {
+                    clearInterval(timerInterval);
+                    db.ref('gameState/isGuessed').once('value', snap => {
+                        if(!snap.val()) {
+                            db.ref('messages').push({ sender: 'SYSTEM', text: `⏰ Time's up! The answer was [ ${word} ]. No points awarded.` });
+                        }
+                    });
+                }
+            }, 1000);
+
+            document.getElementById('target-word').value = "";
+        }
+
+        function clearCanvas() { db.ref('drawing').remove(); }
+        function adjustScore(team, amount) { db.ref(`teams/${team}/score`).transaction(s => (s || 0) + amount); }
+
+        function triggerFinalResult() {
+            if(confirm('確定要結束遊戲並向全場公布最終名次嗎？')) {
+                clearInterval(timerInterval);
+                db.ref('gameState/status').set('result');
+                db.ref('messages').push({ sender: 'SYSTEM', text: '🏆 Game Over! Showing final rankings on screens!' });
+            }
+        }
+
+        function resetEntireGame() {
+            if(confirm('確定要完全重置所有資料嗎？')) {
+                clearInterval(timerInterval);
+                db.ref('/').set({
+                    gameState: { status: 'waiting', activeTeam: '', currentWord: '', isGuessed: false, timer: 0 },
+                    teams: { G1: {score:0}, G2: {score:0}, G3: {score:0} },
+                    messages: { init: { sender: 'SYSTEM', text: 'Game reset! Ready for a new game.' } }
+                });
+                db.ref('drawing').remove();
+            }
+        }
+    </script>
+</body>
+</html>

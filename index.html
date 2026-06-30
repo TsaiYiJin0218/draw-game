@@ -23,9 +23,24 @@
         canvas { width: 100%; height: 100%; display: block; touch-action: none; }
         #word-overlay { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); color: #fff; padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 18px; pointer-events: none; }
         
-        #toolbar { position: absolute; bottom: 10px; left: 10px; display: none; gap: 5px; }
-        .tool-btn { padding: 6px 12px; background: #34495e; color: #fff; border: none; border-radius: 5px; font-size: 12px; cursor: pointer; font-weight: bold; }
-        .tool-btn.active { background: #e67e22; }
+        /* 🎨 全新高質感調色盤工具列樣式 */
+        #toolbar { position: absolute; bottom: 10px; left: 10px; display: none; background: rgba(255, 255, 255, 0.95); padding: 10px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 8px; width: 260px; backdrop-filter: blur(5px); }
+        .slider-group { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: bold; color: #34495e; }
+        .slider-group span { width: 35px; text-align: right; }
+        
+        /* 調整不雅觀的預設外觀 */
+        input[type="range"] { -webkit-appearance: none; width: 100%; height: 10px; border-radius: 5px; outline: none; cursor: pointer; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 2px solid #333; box-shadow: 0 0 3px rgba(0,0,0,0.3); }
+
+        /* 🌈 七彩滑桿背景 */
+        #hue-slider { background: linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%); }
+        /* 🌗 明暗度滑桿背景（會在 JS 中動態更新顏色中間值） */
+        #light-slider { background: linear-gradient(to right, #000000 0%, #ff0000 50%, #ffffff 100%); }
+
+        .tool-row { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; border-top: 1px solid #ddd; padding-top: 6px; }
+        .color-preview { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 5px rgba(0,0,0,0.2); background: #333; }
+        .eraser-btn { padding: 5px 12px; background: #34495e; color: #fff; border: none; border-radius: 5px; font-size: 12px; cursor: pointer; font-weight: bold; }
+        .eraser-btn.active { background: #e67e22; }
 
         .chat-container { height: 180px; background: #fff; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         .chat-messages { flex-grow: 1; padding: 10px; overflow-y: auto; font-size: 14px; display: flex; flex-direction: column; gap: 5px; }
@@ -45,7 +60,6 @@
 </head>
 <body>
 
-    <!-- 1. 登入選組畫面 -->
     <div id="login-screen">
         <h2 style="margin-bottom: 25px; color:#2c3e50; font-size: 24px;">Pictionary 🎉</h2>
         <p style="margin-bottom: 15px; font-weight: bold; color:#7f8c8d;">Select your Team to Join:</p>
@@ -56,7 +70,6 @@
         </div>
     </div>
 
-    <!-- 2. 主要遊戲畫面 -->
     <div id="game-screen">
         <div class="header">
             <div><span id="display-team" style="font-weight:bold;"></span></div>
@@ -71,9 +84,23 @@
         <div class="canvas-container">
             <div id="word-overlay" style="display:none;">Secret Word: <span id="secret-word"></span></div>
             <canvas id="paintCanvas"></canvas>
+            
             <div id="toolbar">
-                <button id="btn-pen" class="tool-btn active" onclick="setTool('pen')">✏️ Pen</button>
-                <button id="btn-eraser" class="tool-btn" onclick="setTool('eraser')">🧽 Eraser</button>
+                <div class="slider-group">
+                    <span>Color</span>
+                    <input type="range" id="hue-slider" min="0" max="360" value="0" oninput="updateColorFromSliders()">
+                </div>
+                <div class="slider-group">
+                    <span>Shade</span>
+                    <input type="range" id="light-slider" min="0" max="100" value="20" oninput="updateColorFromSliders()">
+                </div>
+                <div class="tool-row">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <div id="color-preview" class="color-preview"></div>
+                        <span style="font-size:12px; font-weight:bold; color:#2c3e50;">Brush Color</span>
+                    </div>
+                    <button id="btn-eraser" class="eraser-btn" onclick="toggleEraser()">🧽 Eraser</button>
+                </div>
             </div>
         </div>
 
@@ -86,7 +113,6 @@
         </div>
     </div>
 
-    <!-- 3. 終局排行榜畫面 -->
     <div id="result-screen">
         <h1 style="margin-bottom: 25px; font-size: 30px; letter-spacing: 1px;">🏆 FINAL RANKING 🏆</h1>
         <div class="rank-box" id="rank-container"></div>
@@ -113,7 +139,12 @@
         let myName = "", myTeam = "";
         let isDrawing = false, canDraw = false, lastX = 0, lastY = 0;
         let currentWord = "", isGuessed = false, currentMode = "playing";
-        let activeTool = "pen";
+        
+        // 🎨 滑桿顏色控制變數 (採用 HSL 色彩模式)
+        let activeTool = "pen"; // 'pen' 或 'eraser'
+        let currentHue = 0;     // 0~360 顏色角度
+        let currentLight = 20;  // 0~100 明暗度 (預設稍微深色比較好畫)
+        let selectedColor = "hsl(0, 100%, 20%)";
 
         const canvas = document.getElementById('paintCanvas');
         const ctx = canvas.getContext('2d');
@@ -124,17 +155,39 @@
             ctx.lineCap = 'round';
         }
 
-        // 當調整視窗大小時自動重新整理畫布比例
         window.addEventListener('resize', () => {
             if (document.getElementById('game-screen').style.display === 'flex') {
                 resizeCanvas();
             }
         });
 
-        function setTool(tool) {
-            activeTool = tool;
-            document.getElementById('btn-pen').classList.toggle('active', tool === 'pen');
-            document.getElementById('btn-eraser').classList.toggle('active', tool === 'eraser');
+        // 🎨 新增：當拉動滑桿時觸發計算
+        function updateColorFromSliders() {
+            activeTool = "pen"; // 只要有拉動，就自動切換回畫筆
+            document.getElementById('btn-eraser').classList.remove('active');
+
+            currentHue = document.getElementById('hue-slider').value;
+            currentLight = document.getElementById('light-slider').value;
+            
+            // 組合成標準 HSL 顏色字串
+            selectedColor = `hsl(${currentHue}, 100%, ${currentLight}%)`;
+            
+            // 更新圓點預覽
+            document.getElementById('color-preview').style.background = selectedColor;
+            
+            // 讓第二條明暗度滑桿的「背景中間色」隨著第一條顏色改變，看起來更直覺
+            document.getElementById('light-slider').style.background = `linear-gradient(to right, #000000 0%, hsl(${currentHue}, 100%, 50%) 50%, #ffffff 100%)`;
+        }
+
+        // 🎨 新增：橡皮擦切換
+        function toggleEraser() {
+            if (activeTool === 'eraser') {
+                activeTool = 'pen';
+                document.getElementById('btn-eraser').classList.remove('active');
+            } else {
+                activeTool = 'eraser';
+                document.getElementById('btn-eraser').classList.add('active');
+            }
         }
 
         function joinGame(team) {
@@ -146,6 +199,8 @@
             document.getElementById('game-screen').style.display = 'flex';
             
             resizeCanvas();
+            // 初始化滑桿外觀
+            updateColorFromSliders();
             initSync();
         }
 
@@ -163,7 +218,6 @@
                 document.getElementById('current-timer').innerText = t !== null ? t : 0;
             });
 
-            // 🟢 監聽狀態（大廳掛網放行優化版）
             db.ref('gameState').on('value', snapshot => {
                 const state = snapshot.val();
                 if(!state) return;
@@ -172,7 +226,6 @@
                 isGuessed = state.isGuessed || false;
                 currentMode = state.status || "playing";
 
-                // 重設回 waiting 時，允許玩家留在遊戲畫面，不強制彈出！
                 if(currentMode === 'waiting') {
                     document.getElementById('result-screen').style.display = 'none';
                     document.getElementById('word-overlay').style.display = 'none';
@@ -191,7 +244,6 @@
                 } else {
                     document.getElementById('result-screen').style.display = 'none';
                     if (document.getElementById('login-screen').style.display !== 'none') {
-                        // 如果一開始沒進來，在非 waiting/result 狀態下確保能開起遊戲畫面
                         document.getElementById('game-screen').style.display = 'flex';
                     }
                 }
@@ -284,10 +336,13 @@
         canvas.addEventListener('touchend', stopDraw);
 
         function startDraw(e) { if(!canDraw) return; isDrawing = true; lastX = e.offsetX; lastY = e.offsetY; }
+        
         function drawing(e) {
             if(!isDrawing || !canDraw) return;
             const curX = e.offsetX; const curY = e.offsetY;
-            const drawColor = (activeTool === 'eraser') ? '#ffffff' : '#333333';
+            
+            // 🎨 畫筆顏色由原本固定的改為讀取拉桿調出來的顏色 selectedColor
+            const drawColor = (activeTool === 'eraser') ? '#ffffff' : selectedColor;
             const drawWidth = (activeTool === 'eraser') ? 25 : 4;
 
             ctx.strokeStyle = drawColor;

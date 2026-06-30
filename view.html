@@ -1,67 +1,73 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>遊戲即時轉播大螢幕 🎬</title>
+    <title>Live Dashboard 🎬</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         
-        /* 🤍 簡約清爽純白風格背景 */
         body { background: #f8f9fa; color: #212529; height: 100vh; display: flex; flex-direction: column; overflow: hidden; padding: 25px; }
         
-        /* 👑 頂部超大狀態與分數整合列 */
+        /* 👑 頂部狀態列 */
         .info-header { display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 15px 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; border: 1px solid #e9ecef; }
         
-        /* 左側：戰局回數與當前畫家 */
         .status-left { display: flex; align-items: center; gap: 20px; }
         .round-box { font-size: 32px; font-weight: 800; color: #2b3a4a; letter-spacing: 0.5px; }
-        .team-box { font-size: 22px; font-weight: 600; background: #f1f3f5; padding: 6px 18px; border-radius: 8px; color: #495057; border: 1px solid #dee2e6; }
+        .team-box { font-size: 22px; font-weight: 600; background: #f1f3f5; padding: 6px 18px; border-radius: 8px; color: #495057; border: 1px solid #dee2e6; text-transform: uppercase; }
         
-        /* 🔥 重點新增：中央三大組別即時分數看板 */
+        /* 🎯 三組即時分數 */
         .scoreboard-center { display: flex; gap: 25px; align-items: center; }
         .score-card { display: flex; flex-direction: column; align-items: center; min-width: 90px; padding: 4px 10px; border-radius: 8px; background: #fff; border: 1px solid #e9ecef; }
         .score-card .team-name { font-size: 14px; font-weight: 700; text-transform: uppercase; margin-bottom: 2px; }
         .score-card .score-num { font-size: 32px; font-weight: 900; line-height: 1; }
         
-        /* 簡約白風格下的三組微色調 */
         .sc-g1 { border-bottom: 4px solid #ff6b6b; color: #ff6b6b; }
         .sc-g2 { border-bottom: 4px solid #20c997; color: #20c997; }
         .sc-g3 { border-bottom: 4px solid #00b4d8; color: #00b4d8; }
 
-        /* 右側：超大倒數計時 */
         .timer-box { font-size: 36px; font-weight: 800; color: #dc3545; background: rgba(220, 53, 69, 0.05); padding: 5px 22px; border-radius: 8px; border: 1px solid rgba(220, 53, 69, 0.2); min-width: 130px; text-align: center; }
         
-        /* 當前作畫組別的動態高亮樣式 */
+        /* 動態作畫組別高亮 */
         .g1-active { background: #fff5f5 !important; color: #ff6b6b !important; border-color: #ffc9c9 !important; font-weight: 700; }
         .g2-active { background: #e6fcf5 !important; color: #20c997 !important; border-color: #96f2d7 !important; font-weight: 700; }
         .g3-active { background: #e3fafc !important; color: #00b4d8 !important; border-color: #99e9f2 !important; font-weight: 700; }
         .waiting-active { background: #f8f9fa !important; color: #6c757d !important; }
 
-        /* 🎯 主要內容區塊 */
+        /* 遊戲主要容器（畫布與聊天室） */
         .main-container { display: flex; flex: 1; gap: 20px; min-height: 0; }
         
-        /* 🎨 左側：完美放大的乾淨畫布區 */
         .view-canvas-container { flex: 7; background: #ffffff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #e9ecef; overflow: hidden; position: relative; }
         #viewCanvas { width: 100%; height: 100%; display: block; background: #ffffff; }
         
-        /* 💬 右側：極簡對話訊息區 */
         .view-chat-container { flex: 3; background: #ffffff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #e9ecef; display: flex; flex-direction: column; overflow: hidden; padding: 20px; }
-        .chat-title { font-size: 16px; font-weight: 700; color: #495057; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #f1f3f5; }
+        .chat-title { font-size: 16px; font-weight: 700; color: #495057; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #f1f3f5; text-transform: uppercase; letter-spacing: 0.5px; }
         .view-chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 5px; min-height: 0; }
         
-        /* 💬 簡約對話氣泡 */
         .msg { padding: 8px 14px; border-radius: 8px; background: #f1f3f5; font-size: 16px; width: fit-content; max-width: 90%; color: #343a40; word-break: break-all; animation: fadeIn 0.25s ease; border: 1px solid #e9ecef; }
         .msg.G1 { border-left: 4px solid #ff6b6b; background: #fff5f5; }
         .msg.G2 { border-left: 4px solid #20c997; background: #e6fcf5; }
         .msg.G3 { border-left: 4px solid #00b4d8; background: #e3fafc; }
-        
-        /* 🎉 系統答對、開局等高醒目大公告（白底綠字，大方典雅） */
         .msg.system { background: #d3f9d8; color: #2b8a3e; font-weight: bold; align-self: center; text-align: center; font-size: 15px; border-radius: 8px; width: 100%; max-width: 100%; padding: 12px; border: 1px solid #b2f2bb; box-shadow: 0 2px 8px rgba(43,138,62,0.05); }
 
+        /* 🏆 重點新增：大螢幕專用全螢幕最終結算畫面 */
+        #final-result-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #ffffff; z-index: 999; display: none; flex-direction: column; justify-content: center; align-items: center; padding: 40px; animation: scaleUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .result-title { font-size: 48px; font-weight: 900; color: #2c3e50; margin-bottom: 40px; letter-spacing: 2px; text-transform: uppercase; display: flex; align-items: center; gap: 15px; }
+        .podium-container { display: flex; flex-direction: column; gap: 20px; width: 100%; max-width: 600px; }
+        .podium-row { display: flex; justify-content: space-between; align-items: center; padding: 25px 40px; border-radius: 16px; font-size: 28px; font-weight: 800; box-shadow: 0 6px 20px rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.05); transition: transform 0.2s; }
+        
+        /* 頒獎台金銀銅牌極簡風格 */
+        .rank-1 { background: linear-gradient(135deg, #fffcf0, #fff7d6); color: #b7791f; border: 2px solid #f6e05e; transform: scale(1.03); }
+        .rank-2 { background: linear-gradient(135deg, #f8f9fa, #e2e8f0); color: #4a5568; border: 1px solid #cbd5e0; }
+        .rank-3 { background: linear-gradient(135deg, #fffaf7, #edd4c2); color: #dd6b20; border: 1px solid #feebc8; }
+        
+        .rank-badge { font-size: 32px; display: flex; align-items: center; gap: 10px; }
+        .result-score { font-size: 36px; font-weight: 900; }
+
         @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes scaleUp { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
     </style>
 </head>
 <body>
@@ -69,7 +75,7 @@
     <div class="info-header">
         <div class="status-left">
             <div class="round-box" id="display-round">Round --</div>
-            <div class="team-box waiting-active" id="display-team">準備中</div>
+            <div class="team-box waiting-active" id="display-team">Waiting</div>
         </div>
         
         <div class="scoreboard-center">
@@ -96,9 +102,14 @@
         </div>
         
         <div class="view-chat-container">
-            <div class="chat-title">💬 現場即時對話</div>
+            <div class="chat-title">💬 Live Chat</div>
             <div class="view-chat-messages" id="view-chat-box"></div>
         </div>
+    </div>
+
+    <div id="final-result-overlay">
+        <div class="result-title">🏆 Final Ranking 🏆</div>
+        <div class="podium-container" id="final-podium"></div>
     </div>
 
     <script>
@@ -119,7 +130,6 @@
         }
         const db = firebase.database();
 
-        // 🎬 畫布渲染初始化
         const canvas = document.getElementById('viewCanvas');
         const ctx = canvas.getContext('2d');
         
@@ -131,7 +141,6 @@
         window.addEventListener('load', initCanvasSize);
         window.addEventListener('resize', initCanvasSize);
 
-        // 🎯 題目與 Round 數字順序對照表
         const topicRoundMap = {
             'Sweet potato balls': 1, 'samgsung': 2, 'Kimchi': 3,
             'Ring Toss': 4, 'Hugo': 5, 'Taipei 101': 6,
@@ -139,62 +148,99 @@
             'IPhone': 10, 'hotpot': 11, 'smart delivery car': 12
         };
 
-        // 👑 監聽即時分數
+        // 全域變數用來記錄分數快照，供結算畫面隨時抓取
+        let currentTeamsScore = { G1:{score:0}, G2:{score:0}, G3:{score:0} };
+
         db.ref('teams').on('value', snapshot => {
             const data = snapshot.val() || { G1:{score:0}, G2:{score:0}, G3:{score:0} };
+            currentTeamsScore = data; // 更新全域緩存
             document.getElementById('view-score-G1').innerText = data.G1?.score || 0;
             document.getElementById('view-score-G2').innerText = data.G2?.score || 0;
             document.getElementById('view-score-G3').innerText = data.G3?.score || 0;
+            
+            // 如果當前狀態已經是結算，即時連動更新結算畫面
+            if(currentStatus === 'result') { renderFinalPodium(data); }
         });
 
-        // 👑 監聽整體遊戲狀態
+        let currentStatus = "waiting";
+
         db.ref('gameState').on('value', snapshot => {
             const state = snapshot.val();
             if(!state) return;
 
-            // 1. 同步時間
+            currentStatus = state.status || "waiting";
             document.getElementById('display-timer').innerText = state.timer !== null ? state.timer : 0;
 
-            // 2. 判斷第幾 Round
+            // 處理結算畫面控制
+            const overlay = document.getElementById('final-result-overlay');
+            if(currentStatus === 'result') {
+                overlay.style.display = 'flex';
+                renderFinalPodium(currentTeamsScore);
+                return; // 結算後跳出，不執行下方一般狀態邏輯
+            } else {
+                overlay.style.display = 'none';
+            }
+
             const currentWord = state.currentWord || "";
             const foundRound = topicRoundMap[currentWord];
             if (foundRound) {
                 document.getElementById('display-round').innerText = `Round ${foundRound}`;
             } else if (state.status === 'playing') {
-                document.getElementById('display-round').innerText = `自訂挑戰賽`;
-            } else if (state.status === 'result') {
-                document.getElementById('display-round').innerText = `🏆 最終結算`;
+                document.getElementById('display-round').innerText = `Custom Round`;
             } else {
                 document.getElementById('display-round').innerText = `Round --`;
             }
 
-            // 3. 變更「哪一組在畫」的動態標籤狀態
             const teamEl = document.getElementById('display-team');
             teamEl.className = "team-box"; 
 
             if(state.status === 'playing') {
                 if(state.isGuessed) {
-                    teamEl.innerText = "🎉 順利答對！";
+                    teamEl.innerText = "Guessed!";
                     teamEl.classList.add('waiting-active');
                 } else if(state.timer <= 0) {
-                    teamEl.innerText = "⏰ 時間到！";
+                    teamEl.innerText = "Time Up!";
                     teamEl.classList.add('waiting-active');
                 } else {
-                    teamEl.innerText = `${state.activeTeam} 組作畫中`;
+                    teamEl.innerText = `${state.activeTeam} Drawing`;
                     if(state.activeTeam === 'G1') teamEl.classList.add('g1-active');
                     if(state.activeTeam === 'G2') teamEl.classList.add('g2-active');
                     if(state.activeTeam === 'G3') teamEl.classList.add('g3-active');
                 }
-            } else if(state.status === 'result') {
-                teamEl.innerText = "排行揭曉";
-                teamEl.classList.add('waiting-active');
             } else {
-                teamEl.innerText = "等待開局";
+                teamEl.innerText = "Ready";
                 teamEl.classList.add('waiting-active');
             }
         });
 
-        // 🎨 同步畫筆軌跡
+        // 渲染大螢幕最終獲勝排名
+        function renderFinalPodium(teamsData) {
+            const container = document.getElementById('final-podium');
+            container.innerHTML = "";
+            
+            let arr = [
+                { name: 'Team G1', score: teamsData?.G1?.score || 0 },
+                { name: 'Team G2', score: teamsData?.G2?.score || 0 },
+                { name: 'Team G3', score: teamsData?.G3?.score || 0 }
+            ];
+            
+            // 依分數從高到低排序
+            arr.sort((a, b) => b.score - a.score);
+            
+            const emojis = ["🥇", "🥈", "🥉"];
+            
+            arr.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = `podium-row rank-${index + 1}`;
+                div.innerHTML = `
+                    <div class="rank-badge">${emojis[index]} ${item.name}</div>
+                    <div class="result-score">${item.score} <span style="font-size:18px; font-weight:700;">PTS</span></div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // 同步畫筆軌跡
         db.ref('drawing').on('child_added', snapshot => {
             const pt = snapshot.val();
             ctx.strokeStyle = pt.color;
@@ -209,7 +255,7 @@
             if(!snapshot.exists()) ctx.clearRect(0, 0, canvas.width, canvas.height);
         });
 
-        // 💬 聊天室訊息同步
+        // 聊天室訊息同步
         db.ref('messages').limitToLast(20).on('value', snapshot => {
             const box = document.getElementById('view-chat-box');
             box.innerHTML = "";

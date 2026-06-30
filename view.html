@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>遊戲即時轉播大螢幕 🎬</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        
+        /* 🤍 簡約清爽純白風格背景 */
+        body { background: #f8f9fa; color: #212529; height: 100vh; display: flex; flex-direction: column; overflow: hidden; padding: 25px; }
+        
+        /* 👑 頂部超大狀態與分數整合列 */
+        .info-header { display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 15px 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; border: 1px solid #e9ecef; }
+        
+        /* 左側：戰局回數與當前畫家 */
+        .status-left { display: flex; align-items: center; gap: 20px; }
+        .round-box { font-size: 32px; font-weight: 800; color: #2b3a4a; letter-spacing: 0.5px; }
+        .team-box { font-size: 22px; font-weight: 600; background: #f1f3f5; padding: 6px 18px; border-radius: 8px; color: #495057; border: 1px solid #dee2e6; }
+        
+        /* 🔥 重點新增：中央三大組別即時分數看板 */
+        .scoreboard-center { display: flex; gap: 25px; align-items: center; }
+        .score-card { display: flex; flex-direction: column; align-items: center; min-width: 90px; padding: 4px 10px; border-radius: 8px; background: #fff; border: 1px solid #e9ecef; }
+        .score-card .team-name { font-size: 14px; font-weight: 700; text-transform: uppercase; margin-bottom: 2px; }
+        .score-card .score-num { font-size: 32px; font-weight: 900; line-height: 1; }
+        
+        /* 簡約白風格下的三組微色調 */
+        .sc-g1 { border-bottom: 4px solid #ff6b6b; color: #ff6b6b; }
+        .sc-g2 { border-bottom: 4px solid #20c997; color: #20c997; }
+        .sc-g3 { border-bottom: 4px solid #00b4d8; color: #00b4d8; }
+
+        /* 右側：超大倒數計時 */
+        .timer-box { font-size: 36px; font-weight: 800; color: #dc3545; background: rgba(220, 53, 69, 0.05); padding: 5px 22px; border-radius: 8px; border: 1px solid rgba(220, 53, 69, 0.2); min-width: 130px; text-align: center; }
+        
+        /* 當前作畫組別的動態高亮樣式 */
+        .g1-active { background: #fff5f5 !important; color: #ff6b6b !important; border-color: #ffc9c9 !important; font-weight: 700; }
+        .g2-active { background: #e6fcf5 !important; color: #20c997 !important; border-color: #96f2d7 !important; font-weight: 700; }
+        .g3-active { background: #e3fafc !important; color: #00b4d8 !important; border-color: #99e9f2 !important; font-weight: 700; }
+        .waiting-active { background: #f8f9fa !important; color: #6c757d !important; }
+
+        /* 🎯 主要內容區塊 */
+        .main-container { display: flex; flex: 1; gap: 20px; min-height: 0; }
+        
+        /* 🎨 左側：完美放大的乾淨畫布區 */
+        .view-canvas-container { flex: 7; background: #ffffff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #e9ecef; overflow: hidden; position: relative; }
+        #viewCanvas { width: 100%; height: 100%; display: block; background: #ffffff; }
+        
+        /* 💬 右側：極簡對話訊息區 */
+        .view-chat-container { flex: 3; background: #ffffff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #e9ecef; display: flex; flex-direction: column; overflow: hidden; padding: 20px; }
+        .chat-title { font-size: 16px; font-weight: 700; color: #495057; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #f1f3f5; }
+        .view-chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 5px; min-height: 0; }
+        
+        /* 💬 簡約對話氣泡 */
+        .msg { padding: 8px 14px; border-radius: 8px; background: #f1f3f5; font-size: 16px; width: fit-content; max-width: 90%; color: #343a40; word-break: break-all; animation: fadeIn 0.25s ease; border: 1px solid #e9ecef; }
+        .msg.G1 { border-left: 4px solid #ff6b6b; background: #fff5f5; }
+        .msg.G2 { border-left: 4px solid #20c997; background: #e6fcf5; }
+        .msg.G3 { border-left: 4px solid #00b4d8; background: #e3fafc; }
+        
+        /* 🎉 系統答對、開局等高醒目大公告（白底綠字，大方典雅） */
+        .msg.system { background: #d3f9d8; color: #2b8a3e; font-weight: bold; align-self: center; text-align: center; font-size: 15px; border-radius: 8px; width: 100%; max-width: 100%; padding: 12px; border: 1px solid #b2f2bb; box-shadow: 0 2px 8px rgba(43,138,62,0.05); }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+    <div class="info-header">
+        <div class="status-left">
+            <div class="round-box" id="display-round">Round --</div>
+            <div class="team-box waiting-active" id="display-team">準備中</div>
+        </div>
+        
+        <div class="scoreboard-center">
+            <div class="score-card sc-g1">
+                <span class="team-name">Team G1</span>
+                <span class="score-num" id="view-score-G1">0</span>
+            </div>
+            <div class="score-card sc-g2">
+                <span class="team-name">Team G2</span>
+                <span class="score-num" id="view-score-G2">0</span>
+            </div>
+            <div class="score-card sc-g3">
+                <span class="team-name">Team G3</span>
+                <span class="score-num" id="view-score-G3">0</span>
+            </div>
+        </div>
+        
+        <div class="timer-box">⏳ <span id="display-timer">0</span>s</div>
+    </div>
+
+    <div class="main-container">
+        <div class="view-canvas-container">
+            <canvas id="viewCanvas"></canvas>
+        </div>
+        
+        <div class="view-chat-container">
+            <div class="chat-title">💬 現場即時對話</div>
+            <div class="view-chat-messages" id="view-chat-box"></div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAfVdbS6K6qMNvw8rdHoGMYjnMTH4QoygM",
+            authDomain: "u-draw-i-guess.firebaseapp.com",
+            databaseURL: "https://u-draw-i-guess-default-rtdb.firebaseio.com/", 
+            projectId: "u-draw-i-guess",
+            storageBucket: "u-draw-i-guess.firebasestorage.app",
+            messagingSenderId: "527918146258",
+            appId: "1:527918146258:web:86d26163b5c5464368830b"
+        };
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        } else {
+            firebase.app();
+        }
+        const db = firebase.database();
+
+        // 🎬 畫布渲染初始化
+        const canvas = document.getElementById('viewCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        function initCanvasSize() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            ctx.lineCap = 'round';
+        }
+        window.addEventListener('load', initCanvasSize);
+        window.addEventListener('resize', initCanvasSize);
+
+        // 🎯 題目與 Round 數字順序對照表
+        const topicRoundMap = {
+            'Sweet potato balls': 1, 'samgsung': 2, 'Kimchi': 3,
+            'Ring Toss': 4, 'Hugo': 5, 'Taipei 101': 6,
+            'cat': 7, 'bubble tea': 8, 'Seoul Tower': 9,
+            'IPhone': 10, 'hotpot': 11, 'smart delivery car': 12
+        };
+
+        // 👑 監聽即時分數
+        db.ref('teams').on('value', snapshot => {
+            const data = snapshot.val() || { G1:{score:0}, G2:{score:0}, G3:{score:0} };
+            document.getElementById('view-score-G1').innerText = data.G1?.score || 0;
+            document.getElementById('view-score-G2').innerText = data.G2?.score || 0;
+            document.getElementById('view-score-G3').innerText = data.G3?.score || 0;
+        });
+
+        // 👑 監聽整體遊戲狀態
+        db.ref('gameState').on('value', snapshot => {
+            const state = snapshot.val();
+            if(!state) return;
+
+            // 1. 同步時間
+            document.getElementById('display-timer').innerText = state.timer !== null ? state.timer : 0;
+
+            // 2. 判斷第幾 Round
+            const currentWord = state.currentWord || "";
+            const foundRound = topicRoundMap[currentWord];
+            if (foundRound) {
+                document.getElementById('display-round').innerText = `Round ${foundRound}`;
+            } else if (state.status === 'playing') {
+                document.getElementById('display-round').innerText = `自訂挑戰賽`;
+            } else if (state.status === 'result') {
+                document.getElementById('display-round').innerText = `🏆 最終結算`;
+            } else {
+                document.getElementById('display-round').innerText = `Round --`;
+            }
+
+            // 3. 變更「哪一組在畫」的動態標籤狀態
+            const teamEl = document.getElementById('display-team');
+            teamEl.className = "team-box"; 
+
+            if(state.status === 'playing') {
+                if(state.isGuessed) {
+                    teamEl.innerText = "🎉 順利答對！";
+                    teamEl.classList.add('waiting-active');
+                } else if(state.timer <= 0) {
+                    teamEl.innerText = "⏰ 時間到！";
+                    teamEl.classList.add('waiting-active');
+                } else {
+                    teamEl.innerText = `${state.activeTeam} 組作畫中`;
+                    if(state.activeTeam === 'G1') teamEl.classList.add('g1-active');
+                    if(state.activeTeam === 'G2') teamEl.classList.add('g2-active');
+                    if(state.activeTeam === 'G3') teamEl.classList.add('g3-active');
+                }
+            } else if(state.status === 'result') {
+                teamEl.innerText = "排行揭曉";
+                teamEl.classList.add('waiting-active');
+            } else {
+                teamEl.innerText = "等待開局";
+                teamEl.classList.add('waiting-active');
+            }
+        });
+
+        // 🎨 同步畫筆軌跡
+        db.ref('drawing').on('child_added', snapshot => {
+            const pt = snapshot.val();
+            ctx.strokeStyle = pt.color;
+            ctx.lineWidth = pt.width * (canvas.height / 250); 
+            ctx.beginPath();
+            ctx.moveTo(pt.x1 * canvas.width, pt.y1 * canvas.height);
+            ctx.lineTo(pt.x2 * canvas.width, pt.y2 * canvas.height);
+            ctx.stroke();
+        });
+
+        db.ref('drawing').on('value', snapshot => {
+            if(!snapshot.exists()) ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+
+        // 💬 聊天室訊息同步
+        db.ref('messages').limitToLast(20).on('value', snapshot => {
+            const box = document.getElementById('view-chat-box');
+            box.innerHTML = "";
+            snapshot.forEach(child => {
+                const m = child.val();
+                const div = document.createElement('div');
+                
+                if(m.sender === 'SYSTEM') {
+                    div.className = 'msg system';
+                } else {
+                    div.className = `msg ${m.sender}`;
+                }
+                div.innerText = m.text;
+                box.appendChild(div);
+            });
+            box.scrollTop = box.scrollHeight; 
+        });
+    </script>
+</body>
+</html>

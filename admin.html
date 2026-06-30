@@ -20,15 +20,20 @@
         .score-btn { width: auto; padding: 5px 15px; margin: 0 5px; }
         #timer-display { font-size: 24px; font-weight: bold; color: #e74c3c; text-align: center; margin: 10px 0; }
         
-        /* 🎯 新增：題目快捷鍵網格排版 */
+        /* 🎯 題目快捷鍵網格排版 */
         .topic-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 15px; margin-top: 5px; }
-        @media (max-width: 500px) { .topic-grid { grid-template-columns: repeat(2, 1fr); } } /* 手機版變兩欄 */
-        .btn-topic { padding: 10px; background: #2980b9; color: #fff; font-size: 13px; font-weight: normal; border-radius: 5px; border: none; cursor: pointer; text-align: center; margin-bottom: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .btn-topic:hover { background: #3498db; transform: scale(1.02); }
+        @media (max-width: 500px) { .topic-grid { grid-template-columns: repeat(2, 1fr); } } 
+        .btn-topic { padding: 10px; color: #fff; font-size: 13px; font-weight: normal; border-radius: 5px; border: none; cursor: pointer; text-align: center; margin-bottom: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .btn-topic:hover { transform: scale(1.02); opacity: 0.9; }
         
+        /* 🎨 用顏色區分出題組別，方便後台肉眼識別 */
+        .t-g1 { background: #2980b9; } /* 藍色 - G1 */
+        .t-g2 { background: #27ae60; } /* 綠色 - G2 */
+        .t-g3 { background: #8e44ad; } /* 紫色 - G3 */
+
         /* 👑 戰局監控排版優化 */
         .preview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-        @media (max-width: 480px) { .preview-grid { grid-template-columns: 1fr; } } /* 手機版自動改單欄 */
+        @media (max-width: 480px) { .preview-grid { grid-template-columns: 1fr; } } 
         
         .preview-container { text-align: center; background: #2c3e50; padding: 10px; border-radius: 5px; }
         #adminPreviewCanvas { background: #fff; border-radius: 5px; width: 100%; height: 180px; display: block; }
@@ -51,35 +56,38 @@
     
     <div class="card">
         <h2>新回合發布面板</h2>
-        <label>1. 選擇作畫組別：</label>
+        
+        <label>當前手動選擇組別（點擊快捷鍵時會被自動切換）：</label>
         <select id="active-team">
             <option value="G1">G1 組作畫</option>
             <option value="G2">G2 組作畫</option>
             <option value="G3">G3 組作畫</option>
         </select>
 
-        <label>2. 設定限時秒數：</label>
+        <label>設定限時秒數：</label>
         <input type="number" id="round-time" value="60" min="5">
 
-        <label>3. 點擊題目按鈕直接派發：</label>
+        <label>點擊題目自動切換組別並直接發布：</label>
         <div class="topic-grid">
-            <button class="btn-topic" onclick="quickStartRound('Apple')">Apple</button>
-            <button class="btn-topic" onclick="quickStartRound('Sweet potato balls')">Sweet potato balls</button>
-            <button class="btn-topic" onclick="quickStartRound('samgsung')">samgsung</button>
-            <button class="btn-topic" onclick="quickStartRound('Kimchi')">Kimchi</button>
-            <button class="btn-topic" onclick="quickStartRound('Ring Toss')">Ring Toss</button>
-            <button class="btn-topic" onclick="quickStartRound('Hugo')">Hugo</button>
-            <button class="btn-topic" onclick="quickStartRound('Taipei 101')">Taipei 101</button>
-            <button class="btn-topic" onclick="quickStartRound('cat')">cat</button>
-            <button class="btn-topic" onclick="quickStartRound('bubble tea')">bubble tea</button>
-            <button class="btn-topic" onclick="quickStartRound('Seoul Tower')">Seoul Tower</button>
-            <button class="btn-topic" onclick="quickStartRound('IPhone')">IPhone</button>
-            <button class="btn-topic" onclick="quickStartRound('hotpot')">hotpot</button>
-            <button class="btn-topic" onclick="quickStartRound('smart delivery car')">smart delivery car</button>
+            <button class="btn-topic t-g1" onclick="quickStartRound('Sweet potato balls', 'G1')">1. Sweet potato</button>
+            <button class="btn-topic t-g2" onclick="quickStartRound('samgsung', 'G2')">2. samgsung</button>
+            <button class="btn-topic t-g3" onclick="quickStartRound('Kimchi', 'G3')">3. Kimchi</button>
+            
+            <button class="btn-topic t-g1" onclick="quickStartRound('Ring Toss', 'G1')">4. Ring Toss</button>
+            <button class="btn-topic t-g2" onclick="quickStartRound('Hugo', 'G2')">5. Hugo</button>
+            <button class="btn-topic t-g3" onclick="quickStartRound('Taipei 101', 'G3')">6. Taipei 101</button>
+            
+            <button class="btn-topic t-g1" onclick="quickStartRound('cat', 'G1')">7. cat</button>
+            <button class="btn-topic t-g2" onclick="quickStartRound('bubble tea', 'G2')">8. bubble tea</button>
+            <button class="btn-topic t-g3" onclick="quickStartRound('Seoul Tower', 'G3')">9. Seoul Tower</button>
+            
+            <button class="btn-topic t-g1" onclick="quickStartRound('IPhone', 'G1')">10. IPhone</button>
+            <button class="btn-topic t-g2" onclick="quickStartRound('hotpot', 'G2')">11. hotpot</button>
+            <button class="btn-topic t-g3" onclick="quickStartRound('smart delivery car', 'G3')">12. smart delivery</button>
         </div>
 
         <div style="border-top: 1px dashed #555; padding-top: 10px; margin-top: 15px;">
-            <label>或者手動輸入自訂題目：</label>
+            <label>或者手動輸入自訂題目（使用上方手動選擇的組別）：</label>
             <input type="text" id="target-word" placeholder="例如：珍珠奶茶..." autocomplete="off">
             <button onclick="startRound()">🚀 派發自訂題目 </button>
         </div>
@@ -227,7 +235,7 @@
             if(!snapshot.exists()) pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
         });
 
-        // 👑 新增：後台即時同步聊天室訊息
+        // 👑 後台即時同步聊天室訊息
         db.ref('messages').limitToLast(20).on('value', snapshot => {
             const box = document.getElementById('adm-chat-box');
             box.innerHTML = "";
@@ -242,13 +250,16 @@
                 div.innerText = m.text;
                 box.appendChild(div);
             });
-            box.scrollTop = box.scrollHeight; // 自動捲動到最下面
+            box.scrollTop = box.scrollHeight;
         });
 
-        // 🎯 新增：快捷按鈕專用一鍵啟動函式
-        function quickStartRound(wordText) {
-            // 將按鈕傳入的題目文字直接帶入 input 欄位，並呼叫原本的派發邏輯
+        // 🎯 這次的核心修改：快捷按鈕傳入題目與指定組別
+        function quickStartRound(wordText, targetTeam) {
+            // 1. 自動幫下拉選單切換成該題目對應的組別
+            document.getElementById('active-team').value = targetTeam;
+            // 2. 自動填入題目文字
             document.getElementById('target-word').value = wordText;
+            // 3. 執行標準發布
             startRound();
         }
 

@@ -359,26 +359,27 @@
         }
         function stopDraw() { isDrawing = false; }
 
-        function sendChatMessage() {
-            const input = document.getElementById('chat-input');
-            const text = input.value.trim();
-            if(!text) return;
-            input.value = "";
+	function sendChatMessage() {
+    	const input = document.getElementById('chat-input');
+    	const text = input.value.trim();
+    	if(!text) return;
+    	input.value = "";
 
-            if(!isGuessed && text === currentWord && currentWord !== "") {
-                db.ref('gameState/isGuessed').set(true);
-                db.ref(`teams/${myTeam}/score`).transaction(s => (s || 0) + 1);
-                db.ref('messages').push({
-                    sender: 'SYSTEM',
-                    text: `🎉 ${myTeam} Team correctly guessed the word! The answer is [ ${currentWord} ]!`
-                });
-            } else {
-                db.ref('messages').push({
-                    sender: myTeam,
-                    text: `[${myTeam}] : ${text}`
-                });
-            }
-        }
+    	// 💡 重點修正：兩邊都加上 .toLowerCase()，把 Apple 和 apple 都變成小寫再比對！
+    	if(!isGuessed && currentWord !== "" && text.toLowerCase() === currentWord.toLowerCase()) {
+        	db.ref('gameState/isGuessed').set(true);
+        	db.ref(`teams/${myTeam}/score`).transaction(s => (s || 0) + 1);
+        	db.ref('messages').push({
+            	sender: 'SYSTEM',
+            	text: `🎉 ${myTeam} Team correctly guessed the word! The answer is [ ${currentWord} ]!`
+        	});
+    	} else {
+        	db.ref('messages').push({
+            	sender: myTeam,
+            	text: `[${myTeam}] : ${text}`
+        	});
+    		}
+	}
         document.getElementById('chat-input').addEventListener('keypress', e => { if(e.key === 'Enter') sendChatMessage(); });
     </script>
 </body>
